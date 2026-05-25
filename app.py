@@ -107,6 +107,8 @@ def analyze_pet_data(data: dict[str, str]) -> AnalysisResult:
         additional_info_needed.append("species")
     elif species_key not in SUPPORTED_SPECIES:
         observations.append("Species is outside the explicit support list; recommendations are conservative and general.")
+    elif species_key == "snakes":
+        observations.append("Snake guidance uses broad baseline ranges; species-specific targets can vary.")
 
     notes_blob = " ".join(
         [
@@ -168,7 +170,7 @@ def analyze_pet_data(data: dict[str, str]) -> AnalysisResult:
             observations.append(f"Humidity is within a typical range ({low}-{high}%).")
 
     uvb = data.get("uvb_setup")
-    uvb_replacement = data.get("uvb_replacement_dates") or data.get("uvb_replacement_date")
+    uvb_replacement = data.get("uvb_replacement_date")
     if not uvb:
         additional_info_needed.append("UVB setup")
     else:
