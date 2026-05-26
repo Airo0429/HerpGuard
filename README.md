@@ -22,11 +22,11 @@ python app.py
 
 ## Using Care Guide PDFs
 
-1. Place care guide PDFs in `pdf_guides/` or select one from the GUI.
-2. Use filenames that include the species name (for example, `sulcata_tortoise.pdf`).
-3. Extracted standards are stored in `extracted_data/extracted_species_data.json` and merged into `pet_data.json`.
+1. Place one care guide PDF per species in `pdf_guides/`.
+2. The GUI automatically loads the supported species from that folder.
+3. Species standards are extracted from the bundled PDFs and cached in `extracted_data/extracted_species_data.json`.
 
 ## Notes
 
-- Habitat standards are expected to come from PDFs or `pet_data.json`.
+- Habitat standards are expected to come from the bundled PDFs and cached JSON data.
 - The tool is not a veterinary diagnosis and recommends professional care for serious concerns.

@@ -1,1 +1,35 @@
-{}
+{
+  "bearded dragon": {
+    "feeding_notes": "tweezers\nHousing\nPer leading bearded dragon experts and international reptile welfare guidelines",
+    "humidity_max": 100.0,
+    "humidity_min": 75.0,
+    "temp_max": 46.0,
+    "temp_min": 40.0
+  },
+  "cherry head red footed tortoise": {
+    "humidity_max": 90.0,
+    "humidity_min": 70.0
+  },
+  "indian star tortoise": {
+    "temp_max": 400.0,
+    "temp_min": 35.0
+  },
+  "pacman frog": {
+    "feeding_notes": "your behavior and exercise"
+  },
+  "red footed tortoise": {
+    "feeding_notes": "Dish",
+    "humidity_max": 90.0,
+    "humidity_min": 70.0,
+    "temp_max": 46.0,
+    "temp_min": 30.0
+  },
+  "sulcata tortoise": {
+    "feeding_notes": "dish",
+    "temp_max": 76.0,
+    "temp_min": 61.0
+  },
+  "sunconure": {
+    "feeding_notes": "n A metal grate over the habitat a qualified person to prevent\ndroppings tray will\nThings to remember when maintenance injury to the bird"
+  }
+}

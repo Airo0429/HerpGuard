@@ -3,11 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import os
 
 from dotenv import load_dotenv
 
 from habitat_checker import evaluate_habitat
-from pdf_extractor import extract_species_data, load_extracted_data, save_extracted_data
+from pdf_extractor import (
+    extract_all_species_data,
+    get_guide_path,
+    list_available_species,
+    load_extracted_data,
+    save_extracted_data,
+)
 from prompts import SYSTEM_PROMPT
 
 
@@ -50,6 +57,33 @@ def _merge_standards(primary: dict[str, Any], secondary: dict[str, Any]) -> dict
 
 def _get_species_key(species: str) -> str:
     return species.strip().lower()
+
+
+def _ensure_species_knowledge_base() -> tuple[dict[str, Any], dict[str, Any]]:
+    data_path = Path("pet_data.json")
+    extracted_path = Path("extracted_data/extracted_species_data.json")
+
+    pet_data = _load_pet_data(data_path)
+    extracted_data = load_extracted_data(extracted_path)
+
+    available_species = list_available_species()
+    missing_species = []
+    for species in available_species:
+        species_key = _get_species_key(species)
+        if species_key not in pet_data and species_key not in extracted_data:
+            missing_species.append(species)
+
+    if missing_species or (available_species and not extracted_data):
+        fresh_data = extract_all_species_data()
+        if fresh_data:
+            extracted_data.update(fresh_data)
+            save_extracted_data(extracted_path, extracted_data)
+
+            for species_key, standards in fresh_data.items():
+                pet_data[species_key] = _merge_standards(pet_data.get(species_key, {}), standards)
+            _save_pet_data(data_path, pet_data)
+
+    return pet_data, extracted_data
 
 
 def _build_report_sections(inputs: dict[str, str], standards: dict[str, Any]) -> ReportSections:
@@ -101,14 +135,15 @@ def _format_report(sections: ReportSections, ai_note: str | None) -> str:
 
 def _generate_ai_notes(inputs: dict[str, str], standards: dict[str, Any], concerns: list[str]) -> str | None:
     load_dotenv()
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return "AI summary unavailable (missing OPENAI_API_KEY)."
+
     try:
         from langchain_openai import ChatOpenAI
         from langchain_core.messages import SystemMessage, HumanMessage
     except ImportError:
         return "AI summary unavailable (LangChain not installed)."
-
-    if not Path(".env").exists():
-        return "AI summary unavailable (missing .env with OPENAI_API_KEY)."
 
     if not inputs.get("observations") and not concerns:
         return "AI summary skipped due to limited observation detail."
@@ -141,24 +176,16 @@ def _generate_ai_notes(inputs: dict[str, str], standards: dict[str, Any], concer
     return response.content.strip()
 
 
-def generate_report(inputs: dict[str, str], pdf_path: str | None = None) -> str:
+def generate_report(inputs: dict[str, str]) -> str:
     species = inputs.get("species", "").strip()
     if not species:
         raise RuntimeError("Species is required for analysis.")
 
-    data_path = Path("pet_data.json")
-    extracted_path = Path("extracted_data/extracted_species_data.json")
-    pet_data = _load_pet_data(data_path)
-    extracted_data = load_extracted_data(extracted_path)
+    if get_guide_path(species) is None:
+        available = ", ".join(list_available_species()) or "no supported species"
+        raise RuntimeError(f"Unsupported species. Choose one of: {available}.")
 
-    if pdf_path:
-        species_key, extracted = extract_species_data(pdf_path)
-        if extracted:
-            extracted_data[species_key] = extracted
-            save_extracted_data(extracted_path, extracted_data)
-            pet_data.setdefault(species_key, {})
-            pet_data[species_key] = _merge_standards(pet_data[species_key], extracted)
-            _save_pet_data(data_path, pet_data)
+    pet_data, extracted_data = _ensure_species_knowledge_base()
 
     species_key = _get_species_key(species)
     standards = pet_data.get(species_key) or extracted_data.get(species_key) or {}

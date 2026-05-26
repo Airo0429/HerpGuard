@@ -6,6 +6,56 @@ from pathlib import Path
 from typing import Any
 
 
+GUIDE_DIRECTORY = Path("pdf_guides")
+EXTRACTED_DATA_PATH = Path("extracted_data/extracted_species_data.json")
+PET_DATA_PATH = Path("pet_data.json")
+
+_DISPLAY_NAME_OVERRIDES = {
+    "BEARDEDDRAGON": "Bearded Dragon",
+    "CHERRYHEADREDFOOTEDTORTOISE": "Cherry Head Red Footed Tortoise",
+    "INDIANSTARTORTOISE": "Indian Star Tortoise",
+    "PACMANFROG": "Pacman Frog",
+    "PINKBELLIEDSIDENECKTURTLE": "Pink Bellied Side Neck Turtle",
+    "REDFOOTEDTORTOISE": "Red Footed Tortoise",
+    "SULCATATORTOISE": "Sulcata Tortoise",
+    "SUN CONURE": "Sun Conure",
+}
+
+
+def _species_key(name: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", name.lower())).strip()
+
+
+def _display_name_from_stem(stem: str) -> str:
+    override = _DISPLAY_NAME_OVERRIDES.get(stem.upper())
+    if override:
+        return override
+
+    normalized = re.sub(r"[_-]+", " ", stem).strip()
+    normalized = re.sub(r"([a-z])([A-Z])", r"\1 \2", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.title()
+
+
+def list_available_species() -> list[str]:
+    if not GUIDE_DIRECTORY.exists():
+        return []
+
+    species = [_display_name_from_stem(path.stem) for path in sorted(GUIDE_DIRECTORY.glob("*.pdf"))]
+    return sorted(species)
+
+
+def get_guide_path(species: str) -> Path | None:
+    target_key = _species_key(species)
+    if not GUIDE_DIRECTORY.exists():
+        return None
+
+    for path in GUIDE_DIRECTORY.glob("*.pdf"):
+        if _species_key(_display_name_from_stem(path.stem)) == target_key:
+            return path
+    return None
+
+
 def _extract_text_with_pdfplumber(pdf_path: Path) -> str:
     import pdfplumber
 
@@ -68,8 +118,21 @@ def parse_species_standards(text: str) -> dict[str, Any]:
 def extract_species_data(pdf_path: str) -> tuple[str, dict[str, Any]]:
     text = extract_text(pdf_path)
     standards = parse_species_standards(text)
-    species_key = Path(pdf_path).stem.replace("_", " ").replace("-", " ").lower()
+    species_key = _species_key(_display_name_from_stem(Path(pdf_path).stem))
     return species_key, standards
+
+
+def extract_all_species_data() -> dict[str, Any]:
+    species_data: dict[str, Any] = {}
+    if not GUIDE_DIRECTORY.exists():
+        return species_data
+
+    for pdf_path in sorted(GUIDE_DIRECTORY.glob("*.pdf")):
+        species_key, standards = extract_species_data(str(pdf_path))
+        if standards:
+            species_data[species_key] = standards
+
+    return species_data
 
 
 def load_extracted_data(path: Path) -> dict[str, Any]:
