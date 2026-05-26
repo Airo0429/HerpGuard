@@ -1,6 +1,18 @@
-# HerpGuard
+# HerpGuard Lite
 
-Simple Python HerpGuard AI web UI for text input/output.
+HerpGuard Lite is a lightweight exotic pet monitoring assistant. It gathers habitat inputs, checks care guide standards, and produces a structured report with safety-oriented recommendations.
+
+## Setup
+
+```bash
+pip install -r requirements.txt
+```
+
+Create a `.env` file with your OpenAI key if you want AI summaries:
+
+```text
+OPENAI_API_KEY=your_key_here
+```
 
 ## Run
 
@@ -8,21 +20,13 @@ Simple Python HerpGuard AI web UI for text input/output.
 python app.py
 ```
 
-Open: `http://127.0.0.1:8000`
+## Using Care Guide PDFs
 
-## Input format
+1. Place care guide PDFs in `pdf_guides/` or select one from the GUI.
+2. Use filenames that include the species name (for example, `sulcata_tortoise.pdf`).
+3. Extracted standards are stored in `extracted_data/extracted_species_data.json` and merged into `pet_data.json`.
 
-Enter pet details as `key: value` lines, for example:
+## Notes
 
-```text
-species: Bearded dragons
-basking_temperature: 102
-cool_side_temperature: 79
-humidity: 35
-feeding_schedule: daily
-food_intake: normal
-uvb_setup: T5 HO
-uvb_replacement_date: 2026-04-01
-weight: 320
-historical_logs: weekly logs available
-```
+- Habitat standards are expected to come from PDFs or `pet_data.json`.
+- The tool is not a veterinary diagnosis and recommends professional care for serious concerns.
