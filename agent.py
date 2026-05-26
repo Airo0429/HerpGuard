@@ -138,13 +138,7 @@ def _generate_ai_notes(inputs: dict[str, str], standards: dict[str, Any], concer
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return "AI summary unavailable (missing OPENAI_API_KEY)."
-
-    try:
-        from langchain_openai import ChatOpenAI
-        from langchain_core.messages import SystemMessage, HumanMessage
-    except ImportError:
-        return "AI summary unavailable (LangChain not installed)."
-
+    # If there's very little user-provided detail, skip asking the API.
     if not inputs.get("observations") and not concerns:
         return "AI summary skipped due to limited observation detail."
 
@@ -170,10 +164,55 @@ def _generate_ai_notes(inputs: dict[str, str], standards: dict[str, Any], concer
         concerns="; ".join(concerns) if concerns else "None",
     )
 
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-    messages = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
-    response = model.invoke(messages)
-    return response.content.strip()
+    # Try using the OpenAI Python SDK (v2 client preferred), with a fallback
+    # to the older `openai` interface if available.
+    try:
+        from openai import OpenAI as OpenAIClient
+    except Exception:
+        try:
+            import openai as openai_legacy
+        except Exception:
+            return "AI summary unavailable (OpenAI SDK not installed)."
+        # Legacy `openai` is available; set API key and use ChatCompletion.
+        try:
+            openai_legacy.api_key = api_key
+            resp = openai_legacy.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+                max_tokens=500,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception as exc:
+            return f"AI summary unavailable (API error: {exc})."
+
+    # Use the modern client
+    try:
+        client = OpenAIClient(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=500,
+        )
+        # Response parsing: support both `.choices[0].message.content` and dict-like
+        try:
+            content = resp.choices[0].message.content
+        except Exception:
+            try:
+                content = resp["choices"][0]["message"]["content"]
+            except Exception:
+                return "AI summary unavailable (unexpected API response)."
+
+        return content.strip()
+    except Exception as exc:
+        return f"AI summary unavailable (API error: {exc})."
 
 
 def generate_report(inputs: dict[str, str]) -> str:

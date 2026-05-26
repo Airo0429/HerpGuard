@@ -5,3 +5,5 @@ python-dotenv
 PyPDF2
 pdfplumber
 PySimpleGUI
+PySimpleGUIQt
+PySide6

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import PySimpleGUI as sg
+import PySimpleGUIQt as sg
 
 from agent import generate_report
 from pdf_extractor import list_available_species
