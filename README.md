@@ -1,6 +1,6 @@
-# HerpGuard Lite
+# HerpGuard AI
 
-HerpGuard Lite is a lightweight exotic pet monitoring assistant. It gathers habitat inputs, checks care guide standards, and produces a structured report with safety-oriented recommendations.
+HerpGuard AI is an exotic pet monitoring assistant. It gathers habitat inputs, checks care guide standards, and produces a structured report with safety-oriented recommendations.
 
 ## Setup
 
@@ -8,16 +8,20 @@ HerpGuard Lite is a lightweight exotic pet monitoring assistant. It gathers habi
 pip install -r requirements.txt
 ```
 
-Create a `.env` file with your OpenAI key if you want AI summaries:
+Create a `.env` file to enable the Gemini API:
 
 ```text
-OPENAI_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 ## Run
 
+Install dependencies and run with Streamlit:
+
 ```bash
-python app.py
+pip install -r requirements.txt
+streamlit run gui.py
 ```
 
 ## Using Care Guide PDFs

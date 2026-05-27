@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 import os
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
 
@@ -16,7 +19,6 @@ from pdf_extractor import (
     save_extracted_data,
 )
 from prompts import SYSTEM_PROMPT
-
 
 @dataclass
 class ReportSections:
@@ -133,16 +135,11 @@ def _format_report(sections: ReportSections, ai_note: str | None) -> str:
     return "\n".join(lines)
 
 
-def _generate_ai_notes(inputs: dict[str, str], standards: dict[str, Any], concerns: list[str]) -> str | None:
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return "AI summary unavailable (missing OPENAI_API_KEY)."
-    # If there's very little user-provided detail, skip asking the API.
-    if not inputs.get("observations") and not concerns:
-        return "AI summary skipped due to limited observation detail."
-
-    prompt = (
+def _build_local_ai_prompt(inputs: dict[str, str], standards: dict[str, Any], concerns: list[str]) -> str:
+    return (
+        "You are HerpGuard, an exotic pet husbandry assistant. "
+        "Write a concise, non-diagnostic summary with practical husbandry guidance. "
+        "Keep it to 3-5 short sentences.\n\n"
         "Species: {species}\n"
         "Temperature: {temperature}\n"
         "Humidity: {humidity}\n"
@@ -164,55 +161,131 @@ def _generate_ai_notes(inputs: dict[str, str], standards: dict[str, Any], concer
         concerns="; ".join(concerns) if concerns else "None",
     )
 
-    # Try using the OpenAI Python SDK (v2 client preferred), with a fallback
-    # to the older `openai` interface if available.
-    try:
-        from openai import OpenAI as OpenAIClient
-    except Exception:
-        try:
-            import openai as openai_legacy
-        except Exception:
-            return "AI summary unavailable (OpenAI SDK not installed)."
-        # Legacy `openai` is available; set API key and use ChatCompletion.
-        try:
-            openai_legacy.api_key = api_key
-            resp = openai_legacy.ChatCompletion.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
+
+def _normalize_gemini_model_name(model: str) -> str:
+    name = model.strip()
+    if name.startswith("models/"):
+        return name[len("models/") :]
+    return name
+
+
+def _list_gemini_models(api_key: str) -> list[str]:
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+    request = Request(endpoint, headers={"Content-Type": "application/json"}, method="GET")
+    with urlopen(request, timeout=30) as response:
+        data = json.loads(response.read().decode("utf-8"))
+
+    models: list[str] = []
+    for item in data.get("models", []):
+        methods = item.get("supportedGenerationMethods", [])
+        name = str(item.get("name", "")).strip()
+        if "generateContent" in methods and name.startswith("models/"):
+            models.append(name[len("models/") :])
+    return models
+
+
+def _pick_gemini_model(configured_model: str, available_models: list[str]) -> str:
+    configured = _normalize_gemini_model_name(configured_model)
+    if configured and configured in available_models:
+        return configured
+
+    preferred = [
+        "gemini-3.5-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-flash-latest",
+    ]
+    for model in preferred:
+        if model in available_models:
+            return model
+
+    return configured or (available_models[0] if available_models else "gemini-2.5-flash")
+
+
+def _generate_gemini_notes(inputs: dict[str, str], standards: dict[str, Any], concerns: list[str]) -> str | None:
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return "AI summary unavailable (Gemini API key missing)."
+
+    configured_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+    prompt = _build_local_ai_prompt(inputs, standards, concerns)
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": f"{SYSTEM_PROMPT}\n\n{prompt}"},
                 ],
-                temperature=0.2,
-                max_tokens=500,
-            )
-            return resp.choices[0].message.content.strip()
-        except Exception as exc:
-            return f"AI summary unavailable (API error: {exc})."
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 500,
+        },
+    }
 
-    # Use the modern client
+    available_models: list[str] = []
     try:
-        client = OpenAIClient(api_key=api_key)
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-            max_tokens=500,
+        available_models = _list_gemini_models(api_key)
+        model = _pick_gemini_model(configured_model, available_models)
+        endpoint = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model}:generateContent?key={api_key}"
         )
-        # Response parsing: support both `.choices[0].message.content` and dict-like
-        try:
-            content = resp.choices[0].message.content
-        except Exception:
-            try:
-                content = resp["choices"][0]["message"]["content"]
-            except Exception:
-                return "AI summary unavailable (unexpected API response)."
 
-        return content.strip()
+        request = Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        candidates = data.get("candidates", [])
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts", [])
+            text = "".join(str(part.get("text", "")) for part in parts).strip()
+            if text:
+                return text
+
+        return "AI summary unavailable (Gemini returned an empty response)."
+    except HTTPError as exc:
+        error_body = ""
+        try:
+            error_body = exc.read().decode("utf-8", errors="ignore")
+        except Exception:
+            pass
+        if exc.code in {400, 401, 403}:
+            return "AI summary unavailable (Gemini API key invalid or missing permissions)."
+        if exc.code == 404:
+            if available_models:
+                preview = ", ".join(available_models[:5])
+                return f"AI summary unavailable (Gemini model not found. Available models for this key include: {preview})."
+            if configured_model:
+                return f"AI summary unavailable (Gemini model '{configured_model}' not found for this key/project)."
+            return "AI summary unavailable (Gemini model not found for this key/project)."
+        if exc.code == 429:
+            return "AI summary unavailable (Gemini rate limit reached)."
+        if error_body:
+            return f"AI summary unavailable (Gemini HTTP {exc.code}: {error_body[:300]})."
+        return f"AI summary unavailable (Gemini HTTP {exc.code})."
+    except URLError:
+        return "AI summary unavailable (Gemini API not reachable)."
     except Exception as exc:
-        return f"AI summary unavailable (API error: {exc})."
+        return f"AI summary unavailable (Gemini error: {exc})."
+
+
+def _generate_ai_notes(inputs: dict[str, str], standards: dict[str, Any], concerns: list[str]) -> str | None:
+    load_dotenv()
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+    # If there's very little user-provided detail, skip asking the API.
+    if not inputs.get("observations") and not concerns:
+        return "AI summary skipped due to limited observation detail."
+    if not gemini_key:
+        return "AI summary unavailable (Gemini API key missing)."
+
+    return _generate_gemini_notes(inputs, standards, concerns)
 
 
 def generate_report(inputs: dict[str, str]) -> str:
@@ -232,3 +305,4 @@ def generate_report(inputs: dict[str, str]) -> str:
     sections = _build_report_sections(inputs, standards)
     ai_note = _generate_ai_notes(inputs, standards, sections.concerns)
     return _format_report(sections, ai_note)
+

@@ -1,112 +1,56 @@
 from __future__ import annotations
 
-import PySimpleGUIQt as sg
+import streamlit as st
 
 from agent import generate_report
 from pdf_extractor import list_available_species
 
-sg.theme("DarkBlue3")
 
+def main() -> None:
+    st.set_page_config(page_title="HerpGuard AI", layout="wide")
+    st.title("HerpGuard AI")
 
-def launch_app() -> None:
     species_options = list_available_species()
 
-    input_section = [
-        [sg.Text("HerpGuard Lite", font=("Helvetica", 18, "bold"))],
-        [sg.Text("")],  # spacer
-        [
-            sg.Text("Species", size=(20, 1)),
-            sg.Combo(
-                values=species_options,
-                default_value=species_options[0] if species_options else "",
-                readonly=True,
-                size=(30, 1),
-                key="-SPECIES-",
-            ),
-        ],
-        [
-            sg.Text("Temperature (C)", size=(20, 1)),
-            sg.InputText(size=(30, 1), key="-TEMPERATURE-"),
-        ],
-        [
-            sg.Text("Humidity (%)", size=(20, 1)),
-            sg.InputText(size=(30, 1), key="-HUMIDITY-"),
-        ],
-        [
-            sg.Text("Feeding Behavior", size=(20, 1)),
-            sg.InputText(size=(30, 1), key="-FEEDING-"),
-        ],
-        [
-            sg.Text("Activity Level", size=(20, 1)),
-            sg.InputText(size=(30, 1), key="-ACTIVITY-"),
-        ],
-        [
-            sg.Text("Hydration Notes", size=(20, 1)),
-            sg.InputText(size=(30, 1), key="-HYDRATION-"),
-        ],
-        [
-            sg.Text("Owner Observations", size=(20, 1)),
-            sg.Multiline(size=(40, 5), key="-OBSERVATIONS-"),
-        ],
-        [sg.Button("Analyze"), sg.Button("Clear"), sg.Button("Exit")],
-    ]
+    with st.form(key="input_form"):
+        cols = st.columns([1, 2])
+        with cols[0]:
+            species = st.selectbox("Species", options=species_options, index=0 if species_options else -1)
+            temperature = st.text_input("Temperature (C)")
+            humidity = st.text_input("Humidity (%)")
+            feeding = st.text_input("Feeding Behavior")
+            activity = st.text_input("Activity Level")
+            hydration = st.text_input("Hydration Notes")
+        with cols[1]:
+            observations = st.text_area("Owner Observations", height=160)
 
-    output_section = [
-        [sg.Text("Monitoring Report")],
-        [
-            sg.Multiline(
-                size=(80, 25),
-                key="-OUTPUT-",
-                disabled=True,
-                autoscroll=True,
-            )
-        ],
-    ]
+        submit = st.form_submit_button("Analyze")
 
-    layout = [[sg.Column(input_section), sg.Column(output_section)]]
-
-    window = sg.Window("HerpGuard Lite", layout)
-
-    while True:
-        event, values = window.read()
-
-        if event == sg.WINDOW_CLOSED or event == "Exit":
-            break
-
-        if event == "Clear":
-            window["-SPECIES-"].update(value=species_options[0] if species_options else "")
-            window["-TEMPERATURE-"].update(value="")
-            window["-HUMIDITY-"].update(value="")
-            window["-FEEDING-"].update(value="")
-            window["-ACTIVITY-"].update(value="")
-            window["-HYDRATION-"].update(value="")
-            window["-OBSERVATIONS-"].update(value="")
-            window["-OUTPUT-"].update(value="")
-
-        if event == "Analyze":
-            species = values["-SPECIES-"].strip()
-            if not species:
-                sg.popup_warning("Missing Data", "Please select a supported species.")
-                continue
-
+    if submit:
+        if not species:
+            st.warning("Please select a supported species.")
+        else:
             inputs = {
                 "species": species,
-                "temperature": values["-TEMPERATURE-"].strip(),
-                "humidity": values["-HUMIDITY-"].strip(),
-                "feeding": values["-FEEDING-"].strip(),
-                "activity": values["-ACTIVITY-"].strip(),
-                "hydration": values["-HYDRATION-"].strip(),
-                "observations": values["-OBSERVATIONS-"].strip(),
+                "temperature": temperature.strip(),
+                "humidity": humidity.strip(),
+                "feeding": feeding.strip(),
+                "activity": activity.strip(),
+                "hydration": hydration.strip(),
+                "observations": observations.strip(),
             }
 
             try:
                 report = generate_report(inputs)
-                window["-OUTPUT-"].update(value=report)
+                st.subheader("Monitoring Report")
+                st.code(report, language="text")
             except RuntimeError as exc:
-                sg.popup_error("Processing Error", str(exc))
+                st.error(f"Processing Error: {exc}")
 
-    window.close()
+
+def launch_app() -> None:
+    main()
 
 
 if __name__ == "__main__":
-    launch_app()
+    main()
