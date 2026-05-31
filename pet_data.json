@@ -1,3 +1,15 @@
 {
-  
+  "bearded dragon": {
+    "Species Name": "Bearded Dragon",
+    "basking_temp_max": 70.0,
+    "basking_temp_min": 55.0,
+    "feeding_notes": "Only peeanuts",
+    "humidity_max": 10.0,
+    "humidity_min": 5.0,
+    "temp_max": 0.0,
+    "temp_min": 5.0,
+    "uvb_max": 55.0,
+    "uvb_min": 45.0,
+    "uvb_notes": "1-2 times a day"
+  }
 }

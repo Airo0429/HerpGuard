@@ -27,3 +27,4 @@ DIAGNOSTIC_USER_PROMPT = (
     "  - Only compare observations to the specific numbers/guidelines given\n\n"
     "Be direct and practical. Use short sentences."
 )
+
